@@ -163,8 +163,11 @@
           <form class="form-grid" id="customerForm">
             <input id="customerName" type="text" required placeholder="Customer name">
             <input id="customerPhone" type="tel" placeholder="Phone">
-            <input id="customerAddress" type="text" placeholder="Address">
+            <input id="customerVillage" type="text" list="villageSuggestions" placeholder="Gaon / city">
+            <input id="customerAddress" type="text" placeholder="Mohalla / sector / full address">
             <input id="customerNotes" type="text" placeholder="Notes">
+            <input id="commitmentDate" type="date" placeholder="Payment commitment date">
+            <input id="commitmentAmount" type="number" min="1" step="0.01" placeholder="Committed payment amount">
             <div class="items-editor">
               <div class="items-editor-head">
                 <h4>Items</h4>
@@ -219,8 +222,8 @@
             <h3>Filters</h3>
           </div>
           <div class="filters">
-            <input id="searchBox" type="search" placeholder="Search name, phone, address">
-            <input id="locationFilter" type="text" placeholder="Filter address">
+            <input id="searchBox" type="search" placeholder="Search name, phone, gaon">
+            <input id="locationFilter" type="text" placeholder="Filter gaon / city">
             <input id="monthFilter" type="month">
             <select id="statusFilter">
               <option value="">All status</option>
@@ -231,6 +234,8 @@
             <select id="sortBy">
               <option value="date-desc">Date newest</option>
               <option value="date-asc">Date oldest</option>
+              <option value="gaon-asc">Gaon A-Z</option>
+              <option value="gaon-desc">Gaon Z-A</option>
               <option value="amount-desc">Amount high</option>
               <option value="amount-asc">Amount low</option>
             </select>
@@ -272,6 +277,8 @@
       <p id="paymentFor"></p>
       <input id="paymentAmount" type="number" min="1" step="0.01" required placeholder="Amount paid">
       <input id="paymentDate" type="date" required>
+      <input id="nextCommitmentDate" type="date" placeholder="Next commitment date">
+      <input id="nextCommitmentAmount" type="number" min="1" step="0.01" placeholder="Next committed amount">
       <input id="paymentNotes" type="text" placeholder="Notes">
       <div class="dialog-actions">
         <button class="ghost-btn" value="cancel" type="button" id="closePayment">Cancel</button>
@@ -285,7 +292,8 @@
       <h3>Edit customer</h3>
       <input id="editCustomerName" type="text" required placeholder="Customer name">
       <input id="editCustomerPhone" type="tel" placeholder="Phone">
-      <input id="editCustomerAddress" type="text" placeholder="Address">
+      <input id="editCustomerVillage" type="text" list="villageSuggestions" placeholder="Gaon / city">
+      <input id="editCustomerAddress" type="text" placeholder="Mohalla / sector / full address">
       <input id="editCustomerNotes" type="text" placeholder="Notes">
       <div class="items-editor">
         <div class="items-editor-head">
@@ -310,6 +318,8 @@
       </div>
     </form>
   </dialog>
+
+  <datalist id="villageSuggestions"></datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
