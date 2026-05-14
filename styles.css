@@ -572,6 +572,12 @@ tr:not(.entry-expanded) .customer-meta {
   line-height: 1.35;
 }
 
+.due-cell small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
 .item-cell strong,
 .item-cell span {
   display: block;
@@ -674,6 +680,7 @@ dialog::backdrop {
 
 .dialog-card p {
   color: var(--muted);
+  line-height: 1.45;
 }
 
 .customer-edit-dialog {
