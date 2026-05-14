@@ -1,5 +1,6 @@
 const SUPABASE_URL = "https://pfqondqxyhstbdubblmv.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_gulHkmCVaXooXIS907Zu1Q_1nPUy3po";
+const AUTH_REDIRECT_URL = "https://ntqueprince.github.io/credit/digikhata/index.html";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
@@ -63,6 +64,8 @@ const els = {
   paymentDate: document.querySelector("#paymentDate"),
   itemRows: document.querySelector("#itemRows"),
   addItemRow: document.querySelector("#addItemRow"),
+  editItemRows: document.querySelector("#editItemRows"),
+  addEditItemRow: document.querySelector("#addEditItemRow"),
   customerDialog: document.querySelector("#customerDialog"),
   editCustomerForm: document.querySelector("#editCustomerForm"),
   accountDialog: document.querySelector("#accountDialog"),
@@ -104,7 +107,7 @@ function withTimeout(promise, message, timeoutMs = 20000) {
 }
 
 function getAuthRedirectUrl() {
-  return new URL("index.html", window.location.href).href;
+  return AUTH_REDIRECT_URL;
 }
 
 function showAuthForm() {
@@ -333,6 +336,23 @@ async function loadData() {
   render();
 }
 
+async function refreshData() {
+  const button = document.querySelector("#refreshData");
+  button.disabled = true;
+  const originalText = button.textContent;
+  button.textContent = "Refreshing...";
+
+  try {
+    await loadData();
+  } catch (error) {
+    const message = error.message || "Data refresh failed. Please check your internet and try again.";
+    showAuthPopup("Refresh failed", message);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
 async function boot() {
   const { data } = await supabaseClient.auth.getSession();
   state.session = data.session;
@@ -511,8 +531,11 @@ function renderTable() {
 
     row.innerHTML = `
       <td class="customer-cell" data-label="Customer">
-        <strong>${escapeHtml(entry.customer_name || "-")}</strong>
-        <span>${escapeHtml([entry.customer_phone, entry.customer_location].filter(Boolean).join(" | "))}</span>
+        <button class="entry-toggle" type="button" aria-expanded="false">
+          <strong>${escapeHtml(entry.customer_name || "-")}</strong>
+          <span>Show details</span>
+        </button>
+        <span class="customer-meta">${escapeHtml([entry.customer_phone, entry.customer_location].filter(Boolean).join(" | "))}</span>
       </td>
       <td class="item-cell" data-label="Item">${formatItemName(entry)}</td>
       <td data-label="Credit">${rupee.format(Number(entry.amount || 0))}</td>
@@ -569,12 +592,41 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function createItemRow() {
+function parseEntryItem(entry) {
+  const parts = String(entry.item_name || "")
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const material = (parts.find((part) => /^material:/i.test(part)) || "").replace(/^material:\s*/i, "");
+  const unit = (parts.find((part) => /^unit:/i.test(part)) || "").replace(/^unit:\s*/i, "");
+  const weight = (parts.find((part) => /^weight:/i.test(part)) || "").replace(/^weight:\s*/i, "");
+  const name = parts.find((part) => !/^(material|unit|weight):/i.test(part)) || "";
+  const normalizedMaterial = material.toLowerCase();
+  const materialValue = ["gold", "silver"].includes(normalizedMaterial) ? normalizedMaterial : material ? "other" : "";
+
+  return {
+    id: entry.id,
+    name,
+    weight,
+    unit,
+    material: materialValue,
+    otherMaterial: materialValue === "other" ? material : "",
+    amount: Number(entry.amount || 0),
+    creditDate: entry.credit_date || today(),
+    dueDate: entry.due_date || null,
+    notes: entry.notes || ""
+  };
+}
+
+function createItemRow(item = {}, container = els.itemRows) {
   const row = document.createElement("div");
   row.className = "item-row";
+  if (item.id) row.dataset.entryId = item.id;
+  if (item.creditDate) row.dataset.creditDate = item.creditDate;
+  if (item.dueDate) row.dataset.dueDate = item.dueDate;
   row.innerHTML = `
-    <input class="item-name" type="text" placeholder="Saman / item name">
-    <input class="item-weight" type="text" placeholder="Weight, e.g. 10 gram">
+    <input class="item-name" type="text" placeholder="Saman / item name" value="${escapeHtml(item.name || "")}">
+    <input class="item-weight" type="text" placeholder="Weight, e.g. 10 gram" value="${escapeHtml(item.weight || "")}">
     <select class="item-unit">
       <option value="">Piece / Pair / Set</option>
       <option value="Piece">Piece</option>
@@ -587,31 +639,35 @@ function createItemRow() {
       <option value="silver">Silver</option>
       <option value="other">Other</option>
     </select>
-    <input class="item-other-material hidden" type="text" placeholder="Other item type">
-    <input class="item-amount" type="number" min="1" step="0.01" placeholder="Price">
+    <input class="item-other-material hidden" type="text" placeholder="Other item type" value="${escapeHtml(item.otherMaterial || "")}">
+    <input class="item-amount" type="number" min="1" step="0.01" placeholder="Price" value="${item.amount || ""}">
     <button class="ghost-btn small-btn remove-item" type="button">Remove</button>
   `;
 
-  row.querySelector(".item-material").addEventListener("change", (event) => {
+  row.querySelector(".item-unit").value = item.unit || "";
+  row.querySelector(".item-material").value = item.material || "";
+  const syncOtherMaterial = (event) => {
     const otherInput = row.querySelector(".item-other-material");
     const showOther = event.target.value === "other";
     otherInput.classList.toggle("hidden", !showOther);
     otherInput.required = showOther;
-  });
+  };
+  row.querySelector(".item-material").addEventListener("change", syncOtherMaterial);
+  syncOtherMaterial({ target: row.querySelector(".item-material") });
   row.querySelector(".remove-item").addEventListener("click", () => {
-    if (els.itemRows.children.length > 1) row.remove();
+    if (container.children.length > 1) row.remove();
   });
 
   return row;
 }
 
-function resetItemRows() {
-  els.itemRows.innerHTML = "";
-  els.itemRows.appendChild(createItemRow());
+function resetItemRows(container = els.itemRows, items = [{}]) {
+  container.innerHTML = "";
+  items.forEach((item) => container.appendChild(createItemRow(item, container)));
 }
 
-function collectItemRows() {
-  return [...els.itemRows.querySelectorAll(".item-row")]
+function collectItemRows(container = els.itemRows) {
+  return [...container.querySelectorAll(".item-row")]
     .map((row) => {
       const material = row.querySelector(".item-material").value;
       const otherMaterial = row.querySelector(".item-other-material").value.trim();
@@ -620,15 +676,39 @@ function collectItemRows() {
         : material ? material.charAt(0).toUpperCase() + material.slice(1) : "";
 
       return {
+        id: row.dataset.entryId || "",
         name: row.querySelector(".item-name").value.trim(),
         weight: row.querySelector(".item-weight").value.trim(),
         unit: row.querySelector(".item-unit").value,
         material,
         materialLabel,
-        amount: Number(row.querySelector(".item-amount").value)
+        amount: Number(row.querySelector(".item-amount").value),
+        creditDate: row.dataset.creditDate || today(),
+        dueDate: row.dataset.dueDate || null
       };
     })
     .filter((item) => item.name || item.weight || item.unit || item.material || item.amount);
+}
+
+function findInvalidItem(items) {
+  return items.find((item) => !item.name || !item.unit || !item.material || !item.amount || (item.material === "other" && !item.materialLabel));
+}
+
+function itemToEntryPayload(item, customerId, notes = "") {
+  return {
+    user_id: state.session.user.id,
+    customer_id: customerId,
+    item_name: [
+      item.name,
+      `Material: ${item.materialLabel}`,
+      `Unit: ${item.unit}`,
+      item.weight ? `Weight: ${item.weight}` : ""
+    ].filter(Boolean).join(" | "),
+    amount: item.amount,
+    credit_date: item.creditDate || today(),
+    due_date: item.dueDate || null,
+    notes
+  };
 }
 
 async function addCustomer(event) {
@@ -641,8 +721,7 @@ async function addCustomer(event) {
     return;
   }
 
-  const invalidItem = items.find((item) => !item.name || !item.unit || !item.material || !item.amount || (item.material === "other" && !item.materialLabel));
-  if (invalidItem) {
+  if (findInvalidItem(items)) {
     showAuthPopup("Item details needed", "Please add item name, piece/pair/set, material type, price, and other item type if Other is selected.");
     return;
   }
@@ -667,20 +746,7 @@ async function addCustomer(event) {
     return;
   }
 
-  const entryPayloads = items.map((item) => ({
-      user_id: state.session.user.id,
-      customer_id: customer.id,
-      item_name: [
-        item.name,
-        `Material: ${item.materialLabel}`,
-        `Unit: ${item.unit}`,
-        item.weight ? `Weight: ${item.weight}` : ""
-      ].filter(Boolean).join(" | "),
-      amount: item.amount,
-      credit_date: today(),
-      due_date: null,
-      notes: document.querySelector("#customerNotes").value.trim()
-  }));
+  const entryPayloads = items.map((item) => itemToEntryPayload(item, customer.id, document.querySelector("#customerNotes").value.trim()));
 
   const { error: entryError } = await supabaseClient.from("credit_entries").insert(entryPayloads);
   if (entryError) {
@@ -705,10 +771,15 @@ function toggleCustomerDetails(button) {
 function openCustomerEditor(customerId) {
   state.selectedCustomer = state.customers.find((customer) => customer.id === customerId);
   if (!state.selectedCustomer) return;
+  const customerEntries = state.entries
+    .filter((entry) => entry.customer_id === customerId)
+    .map(parseEntryItem);
+
   document.querySelector("#editCustomerName").value = state.selectedCustomer.name || "";
   document.querySelector("#editCustomerPhone").value = state.selectedCustomer.phone || "";
   document.querySelector("#editCustomerAddress").value = state.selectedCustomer.address || state.selectedCustomer.location || "";
   document.querySelector("#editCustomerNotes").value = state.selectedCustomer.notes || "";
+  resetItemRows(els.editItemRows, customerEntries.length ? customerEntries : [{}]);
   els.customerDialog.showModal();
 }
 
@@ -717,12 +788,25 @@ async function updateCustomer(event) {
   if (!state.selectedCustomer) return;
 
   const address = document.querySelector("#editCustomerAddress").value.trim();
+  const notes = document.querySelector("#editCustomerNotes").value.trim();
+  const items = collectItemRows(els.editItemRows);
+
+  if (items.length === 0) {
+    showAuthPopup("Item details needed", "Please keep at least one item for this customer.");
+    return;
+  }
+
+  if (findInvalidItem(items)) {
+    showAuthPopup("Item details needed", "Please add item name, piece/pair/set, material type, price, and other item type if Other is selected.");
+    return;
+  }
+
   const payload = {
     name: document.querySelector("#editCustomerName").value.trim(),
     phone: document.querySelector("#editCustomerPhone").value.trim(),
     location: address,
     address,
-    notes: document.querySelector("#editCustomerNotes").value.trim()
+    notes
   };
 
   const { error } = await supabaseClient
@@ -733,6 +817,54 @@ async function updateCustomer(event) {
   if (error) {
     showAuthPopup("Customer update failed", error.message);
     return;
+  }
+
+  const previousEntryIds = state.entries
+    .filter((entry) => entry.customer_id === state.selectedCustomer.id)
+    .map((entry) => String(entry.id));
+  const keptEntryIds = items.map((item) => String(item.id)).filter(Boolean);
+  const deletedEntryIds = previousEntryIds.filter((id) => !keptEntryIds.includes(id));
+
+  if (deletedEntryIds.length) {
+    const { error: paymentDeleteError } = await supabaseClient
+      .from("payments")
+      .delete()
+      .in("credit_entry_id", deletedEntryIds);
+    if (paymentDeleteError) {
+      showAuthPopup("Item update failed", paymentDeleteError.message);
+      return;
+    }
+
+    const { error: entryDeleteError } = await supabaseClient
+      .from("credit_entries")
+      .delete()
+      .in("id", deletedEntryIds);
+    if (entryDeleteError) {
+      showAuthPopup("Item update failed", entryDeleteError.message);
+      return;
+    }
+  }
+
+  for (const item of items) {
+    const entryPayload = itemToEntryPayload(item, state.selectedCustomer.id, notes);
+    if (item.id) {
+      const { error: entryUpdateError } = await supabaseClient
+        .from("credit_entries")
+        .update(entryPayload)
+        .eq("id", item.id);
+      if (entryUpdateError) {
+        showAuthPopup("Item update failed", entryUpdateError.message);
+        return;
+      }
+    } else {
+      const { error: entryInsertError } = await supabaseClient
+        .from("credit_entries")
+        .insert(entryPayload);
+      if (entryInsertError) {
+        showAuthPopup("Item update failed", entryInsertError.message);
+        return;
+      }
+    }
   }
 
   els.customerDialog.close();
@@ -970,9 +1102,10 @@ function bindEvents() {
   document.querySelector("#closeCustomerDialog").addEventListener("click", () => els.customerDialog.close());
   document.querySelector("#signOut").addEventListener("click", signOut);
   document.querySelector("#mobileSignOut").addEventListener("click", signOut);
-  document.querySelector("#refreshData").addEventListener("click", loadData);
+  document.querySelector("#refreshData").addEventListener("click", refreshData);
   document.querySelector("#exportCsv").addEventListener("click", exportCsv);
-  els.addItemRow.addEventListener("click", () => els.itemRows.appendChild(createItemRow()));
+  els.addItemRow.addEventListener("click", () => els.itemRows.appendChild(createItemRow({}, els.itemRows)));
+  els.addEditItemRow.addEventListener("click", () => els.editItemRows.appendChild(createItemRow({}, els.editItemRows)));
 
   document.querySelectorAll(".nav-btn").forEach((button) => {
     button.addEventListener("click", () => setActiveView(button.dataset.view));
@@ -987,6 +1120,15 @@ function bindEvents() {
   });
 
   els.entriesTable.addEventListener("click", (event) => {
+    const toggle = event.target.closest(".entry-toggle");
+    if (toggle) {
+      const row = toggle.closest("tr");
+      const isOpen = row.classList.toggle("entry-expanded");
+      toggle.setAttribute("aria-expanded", String(isOpen));
+      toggle.querySelector("span").textContent = isOpen ? "Hide details" : "Show details";
+      return;
+    }
+
     const button = event.target.closest("[data-payment]");
     if (button) openPayment(button.dataset.payment);
   });
