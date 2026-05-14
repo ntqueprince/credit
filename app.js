@@ -1,6 +1,6 @@
 const SUPABASE_URL = "https://pfqondqxyhstbdubblmv.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_gulHkmCVaXooXIS907Zu1Q_1nPUy3po";
-const AUTH_REDIRECT_URL = "https://ntqueprince.github.io/credit/digikhata/index.html";
+const AUTH_REDIRECT_URL = "https://ntqueprince.github.io/credit/";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
