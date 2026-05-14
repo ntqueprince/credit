@@ -841,37 +841,114 @@ dialog::backdrop {
   tr {
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 12px;
+    border-radius: 10px;
+    padding: 14px;
+    position: relative;
   }
 
   td {
     border-bottom: 0;
-    padding: 8px 0;
+    padding: 4px 0;
     display: flex;
     justify-content: space-between;
-    gap: 14px;
-    align-items: flex-start;
+    gap: 8px;
+    align-items: center;
   }
 
   td::before {
     content: attr(data-label);
     color: var(--muted);
-    font-weight: 800;
+    font-weight: 700;
     font-size: 12px;
-    text-transform: uppercase;
-    flex: 0 0 88px;
+    flex: 0 0 50px;
   }
 
-  .customer-cell,
+  /* Customer name — card header style */
+  .customer-cell {
+    display: block;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 4px;
+  }
+
+  .customer-cell::before {
+    display: none;
+  }
+
+  .customer-meta {
+    display: none;
+  }
+
+  /* Item name — simple, no details */
+  .item-cell {
+    padding: 6px 0 2px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .item-cell::before {
+    display: none;
+  }
+
+  .item-cell span,
+  .material-pill {
+    display: none !important;
+  }
+
+  /* Bill — hide on mobile, not needed separately */
+  .bill-cell {
+    display: none;
+  }
+
+  /* Jama (paid) + payment history */
   .paid-cell {
     display: block;
+    padding: 4px 0;
   }
 
-  .customer-cell::before,
   .paid-cell::before {
     display: block;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
+  }
+
+  /* Baki (remaining) — BIG and prominent */
+  .remaining-cell {
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    border-radius: 8px;
+    padding: 10px 12px !important;
+    margin: 6px 0;
+    font-size: 22px;
+    font-weight: 800;
+    color: #991b1b;
+  }
+
+  /* Hide: date, due, status on mobile */
+  .date-cell,
+  .status-cell,
+  .due-cell {
+    display: none;
+  }
+
+  /* Payment button — full width green */
+  .payment-cell {
+    padding-top: 6px !important;
+  }
+
+  .payment-cell::before {
+    display: none;
+  }
+
+  .payment-cell .ghost-btn {
+    width: 100%;
+    text-align: center;
+    padding: 12px;
+    background: var(--accent);
+    color: white;
+    border: 0;
+    border-radius: 8px;
+    font-weight: 800;
+    font-size: 14px;
   }
 
   .bottom-nav {
@@ -881,7 +958,7 @@ dialog::backdrop {
     bottom: 0;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     background: #17332f;
     border-top: 1px solid rgba(255, 255, 255, 0.12);
     padding: 8px 8px max(8px, env(safe-area-inset-bottom));
