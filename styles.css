@@ -519,6 +519,34 @@ th {
   letter-spacing: 0;
 }
 
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+th.sortable:hover {
+  color: var(--accent);
+}
+
+th.sortable::after {
+  content: " ⇅";
+  font-size: 10px;
+  opacity: 0.4;
+}
+
+th.active-sort {
+  color: var(--accent);
+}
+
+th.active-sort::after {
+  content: " ▼";
+  opacity: 1;
+}
+
+th.active-sort.sort-asc::after {
+  content: " ▲";
+}
+
 .customer-cell strong,
 .customer-cell span {
   display: block;
