@@ -14,7 +14,9 @@ const state = {
   selectedEntry: null,
   selectedCustomer: null,
   isPasswordRecovery: false,
-  isSignup: false
+  isSignup: false,
+  sortColumn: "date",
+  sortDirection: "desc"
 };
 
 const rupee = new Intl.NumberFormat("en-IN", {
@@ -58,7 +60,6 @@ const els = {
   settingsView: document.querySelector("#settingsView"),
   settingsForm: document.querySelector("#settingsForm"),
   settingsMessage: document.querySelector("#settingsMessage"),
-  filtersPanel: document.querySelector("#filtersPanel"),
   entriesTableWrap: document.querySelector("#entriesTableWrap"),
   paymentDialog: document.querySelector("#paymentDialog"),
   paymentForm: document.querySelector("#paymentForm"),
@@ -446,7 +447,6 @@ function setActiveView(view) {
   els.customersView.classList.toggle("hidden", view !== "customers");
   els.customerListView.classList.toggle("hidden", view !== "customers");
   els.settingsView.classList.toggle("hidden", view !== "settings");
-  els.filtersPanel.classList.toggle("hidden", !["dashboard", "reminders"].includes(view));
   els.entriesTableWrap.classList.toggle("hidden", !["dashboard", "reminders"].includes(view));
   if (view === "settings") fillSettingsForm();
   renderTable();
@@ -532,49 +532,25 @@ function renderStats() {
 }
 
 function getFilteredEntries() {
-  const search = document.querySelector("#searchBox").value.trim().toLowerCase();
-  const location = document.querySelector("#locationFilter").value.trim().toLowerCase();
-  const month = document.querySelector("#monthFilter").value;
-  const status = document.querySelector("#statusFilter").value;
-  const sortBy = document.querySelector("#sortBy").value;
-
   let list = [...state.entries];
 
   if (state.activeView === "reminders") {
     list = list.filter((entry) => entry.calculated_status !== "paid" && entry.due_date);
   }
 
-  if (search) {
-    list = list.filter((entry) => {
-      const haystack = [
-        entry.customer_name,
-        entry.customer_phone,
-        entry.customer_location,
-        entry.item_name
-      ].join(" ").toLowerCase();
-      return haystack.includes(search);
-    });
-  }
-
-  if (location) {
-    list = list.filter((entry) => (entry.customer_location || "").toLowerCase().includes(location));
-  }
-
-  if (month) {
-    list = list.filter((entry) => (entry.credit_date || "").startsWith(month));
-  }
-
-  if (status) {
-    list = list.filter((entry) => entry.calculated_status === status);
-  }
+  const col = state.sortColumn;
+  const dir = state.sortDirection === "asc" ? 1 : -1;
 
   list.sort((a, b) => {
-    if (sortBy === "amount-desc") return Number(b.amount) - Number(a.amount);
-    if (sortBy === "amount-asc") return Number(a.amount) - Number(b.amount);
-    if (sortBy === "gaon-asc") return String(a.customer_location || "").localeCompare(String(b.customer_location || ""));
-    if (sortBy === "gaon-desc") return String(b.customer_location || "").localeCompare(String(a.customer_location || ""));
-    if (sortBy === "date-asc") return new Date(a.credit_date) - new Date(b.credit_date);
-    return new Date(b.credit_date) - new Date(a.credit_date);
+    if (col === "credit") return dir * (Number(a.amount || 0) - Number(b.amount || 0));
+    if (col === "remaining") return dir * (Number(a.remaining_amount || 0) - Number(b.remaining_amount || 0));
+    if (col === "date") return dir * (new Date(a.credit_date || 0) - new Date(b.credit_date || 0));
+    if (col === "due") return dir * (new Date(a.due_date || "9999") - new Date(b.due_date || "9999"));
+    if (col === "status") {
+      const order = { pending: 0, partial: 1, paid: 2 };
+      return dir * ((order[a.calculated_status] ?? 3) - (order[b.calculated_status] ?? 3));
+    }
+    return dir * (new Date(a.credit_date || 0) - new Date(b.credit_date || 0));
   });
 
   return list;
@@ -708,6 +684,8 @@ function parseEntryItem(entry) {
     material: materialValue,
     otherMaterial: materialValue === "other" ? material : "",
     amount: Number(entry.amount || 0),
+    paidAmount: Number(entry.paid_amount || 0),
+    remainingAmount: Number(entry.remaining_amount || 0),
     creditDate: entry.credit_date || today(),
     dueDate: entry.due_date || null,
     notes: cleanEntryNotes(entry.notes || ""),
@@ -720,9 +698,12 @@ function createItemRow(item = {}, container = els.itemRows) {
   row.className = "item-row";
   if (item.id) row.dataset.entryId = item.id;
   if (item.creditDate) row.dataset.creditDate = item.creditDate;
-  if (item.dueDate) row.dataset.dueDate = item.dueDate;
-  if (item.commitmentAmount) row.dataset.commitmentAmount = item.commitmentAmount;
+  const hasDues = item.id && (item.paidAmount > 0 || item.remainingAmount > 0);
+  const duesHtml = hasDues
+    ? `<div class="item-dues">Jama: ${rupee.format(item.paidAmount || 0)} | Baki: ${rupee.format(item.remainingAmount || 0)}</div>`
+    : "";
   row.innerHTML = `
+    ${duesHtml}
     <input class="item-name" type="text" placeholder="Saman / item name" value="${escapeHtml(item.name || "")}">
     <input class="item-weight" type="text" placeholder="Weight, e.g. 10 gram" value="${escapeHtml(item.weight || "")}">
     <select class="item-unit">
@@ -739,6 +720,8 @@ function createItemRow(item = {}, container = els.itemRows) {
     </select>
     <input class="item-other-material hidden" type="text" placeholder="Other item type" value="${escapeHtml(item.otherMaterial || "")}">
     <input class="item-amount" type="number" min="1" step="0.01" placeholder="Price" value="${item.amount || ""}">
+    <input class="item-due-date" type="date" value="${item.dueDate || ""}">
+    <input class="item-commitment" type="number" min="1" step="0.01" placeholder="Committed amount" value="${item.commitmentAmount || ""}">
     <button class="ghost-btn small-btn remove-item" type="button">Remove</button>
   `;
 
@@ -782,8 +765,8 @@ function collectItemRows(container = els.itemRows) {
         materialLabel,
         amount: Number(row.querySelector(".item-amount").value),
         creditDate: row.dataset.creditDate || today(),
-        dueDate: row.dataset.dueDate || null,
-        commitmentAmount: Number(row.dataset.commitmentAmount || 0)
+        dueDate: row.querySelector(".item-due-date").value || null,
+        commitmentAmount: Number(row.querySelector(".item-commitment").value || 0)
       };
     })
     .filter((item) => item.name || item.weight || item.unit || item.material || item.amount);
@@ -820,8 +803,6 @@ async function addCustomer(event) {
   const village = document.querySelector("#customerVillage").value.trim();
   const address = document.querySelector("#customerAddress").value.trim();
   const items = collectItemRows();
-  const commitmentDate = document.querySelector("#commitmentDate").value || null;
-  const commitmentAmount = Number(document.querySelector("#commitmentAmount").value || 0);
 
   if (items.length === 0) {
     showAuthPopup("Item details needed", "Please add at least one item for this customer.");
@@ -833,9 +814,11 @@ async function addCustomer(event) {
     return;
   }
 
-  if ((commitmentDate && !commitmentAmount) || (!commitmentDate && commitmentAmount)) {
-    showAuthPopup("Commitment details needed", "Please add both payment commitment date and committed payment amount.");
-    return;
+  for (const item of items) {
+    if ((item.dueDate && !item.commitmentAmount) || (!item.dueDate && item.commitmentAmount)) {
+      showAuthPopup("Commitment details needed", `Item "${item.name}" mein commitment date aur amount dono daalein, ya dono khaali rakhein.`);
+      return;
+    }
   }
 
   const payload = {
@@ -858,11 +841,7 @@ async function addCustomer(event) {
     return;
   }
 
-  const entryPayloads = items.map((item) => itemToEntryPayload({
-    ...item,
-    dueDate: commitmentDate,
-    commitmentAmount
-  }, customer.id, document.querySelector("#customerNotes").value.trim()));
+  const entryPayloads = items.map((item) => itemToEntryPayload(item, customer.id, document.querySelector("#customerNotes").value.trim()));
 
   const { error: entryError } = await supabaseClient.from("credit_entries").insert(entryPayloads);
   if (entryError) {
@@ -917,6 +896,13 @@ async function updateCustomer(event) {
   if (findInvalidItem(items)) {
     showAuthPopup("Item details needed", "Please add item name, piece/pair/set, material type, price, and other item type if Other is selected.");
     return;
+  }
+
+  for (const item of items) {
+    if ((item.dueDate && !item.commitmentAmount) || (!item.dueDate && item.commitmentAmount)) {
+      showAuthPopup("Commitment details needed", `Item "${item.name}" mein commitment date aur amount dono daalein, ya dono khaali rakhein.`);
+      return;
+    }
   }
 
   const payload = {
@@ -1035,51 +1021,57 @@ async function deleteCustomer(customerId) {
 
 function buildCustomerMessage(customer) {
   const entries = state.entries.filter((entry) => entry.customer_id === customer.id);
-  const lines = [
-    `DigiKhata - ${state.profile?.shop_name || "Khata"}`,
-    "",
-    `Customer: ${customer.name || "-"}`,
-    customer.phone ? `Phone: ${customer.phone}` : "",
-    customer.location ? `Gaon / city: ${customer.location}` : "",
-    customer.address ? `Address: ${customer.address}` : "",
-    "",
-    "Items and payment details:"
-  ].filter((line) => line !== "");
-
-  if (!entries.length) {
-    lines.push("No item entries found.");
-  }
-
-  entries.forEach((entry, index) => {
-    const item = getItemParts(entry);
-    const payments = state.payments.filter((payment) => payment.credit_entry_id === entry.id);
-    const commitmentAmount = getCommitmentAmount(entry);
-    lines.push(
-      "",
-      `${index + 1}. ${item.name}`,
-      item.material ? `Type: ${item.material}` : "",
-      item.weight ? `Weight: ${item.weight}` : "",
-      item.unit ? `Unit: ${item.unit}` : "",
-      `Purchase date: ${entry.credit_date || "-"}`,
-      `Total: ${rupee.format(Number(entry.amount || 0))}`,
-      `Paid: ${rupee.format(Number(entry.paid_amount || 0))}`,
-      `Remaining: ${rupee.format(Number(entry.remaining_amount || 0))}`,
-      entry.due_date ? `Commitment date: ${entry.due_date}` : "",
-      commitmentAmount ? `Committed payment: ${rupee.format(commitmentAmount)}` : "",
-      payments.length ? "Transactions:" : "Transactions: No payments yet"
-    );
-
-    payments.forEach((payment) => {
-      lines.push(`- ${payment.payment_date}: ${rupee.format(Number(payment.amount || 0))}`);
-    });
-  });
+  const shopName = state.profile?.shop_name || "Khata";
 
   const total = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const paid = entries.reduce((sum, entry) => sum + Number(entry.paid_amount || 0), 0);
   const remaining = entries.reduce((sum, entry) => sum + Number(entry.remaining_amount || 0), 0);
-  lines.push("", `Summary: Total ${rupee.format(total)} | Paid ${rupee.format(paid)} | Remaining ${rupee.format(remaining)}`);
 
-  return lines.filter((line) => line !== "").join("\n");
+  const lines = [
+    `*${shopName}*`,
+    `${customer.name || "-"}${customer.location ? ` (${customer.location})` : ""}`
+  ];
+
+  if (!entries.length) {
+    lines.push("", "Koi entry nahi hai.");
+    return lines.join("\n");
+  }
+
+  lines.push("");
+
+  entries.forEach((entry, index) => {
+    const item = getItemParts(entry);
+    const entryTotal = Number(entry.amount || 0);
+    const entryPaid = Number(entry.paid_amount || 0);
+    const entryRemaining = Number(entry.remaining_amount || 0);
+    const payments = state.payments.filter((payment) => payment.credit_entry_id === entry.id);
+    const commitmentAmount = getCommitmentAmount(entry);
+
+    const details = [item.material, item.weight, item.unit].filter(Boolean).join(" | ");
+    lines.push(`${index + 1}. *${item.name}*${details ? ` (${details})` : ""}`);
+    lines.push(`   Bill: ${rupee.format(entryTotal)} | Jama: ${rupee.format(entryPaid)} | *Baki: ${rupee.format(entryRemaining)}*`);
+
+    if (entry.due_date) {
+      const commitText = commitmentAmount ? ` - ${rupee.format(commitmentAmount)}` : "";
+      lines.push(`   Vaada: ${entry.due_date}${commitText}`);
+    }
+
+    if (payments.length) {
+      payments.forEach((payment) => {
+        lines.push(`   - ${payment.payment_date}: ${rupee.format(Number(payment.amount || 0))}`);
+      });
+    }
+
+    lines.push("");
+  });
+
+  lines.push("---");
+  if (entries.length > 1) {
+    lines.push(`Total Bill: ${rupee.format(total)} | Jama: ${rupee.format(paid)}`);
+  }
+  lines.push(`*Baki: ${rupee.format(remaining)}*`);
+
+  return lines.join("\n");
 }
 
 function shareCustomerOnWhatsApp(customerId) {
@@ -1327,9 +1319,21 @@ function bindEvents() {
     button.addEventListener("click", () => setActiveView(button.dataset.view));
   });
 
-  ["searchBox", "locationFilter", "monthFilter", "statusFilter", "sortBy"].forEach((id) => {
-    document.querySelector(`#${id}`).addEventListener("input", renderTable);
-    document.querySelector(`#${id}`).addEventListener("change", renderTable);
+  document.querySelectorAll("th.sortable").forEach((th) => {
+    th.addEventListener("click", () => {
+      const col = th.dataset.sort;
+      if (state.sortColumn === col) {
+        state.sortDirection = state.sortDirection === "desc" ? "asc" : "desc";
+      } else {
+        state.sortColumn = col;
+        state.sortDirection = "desc";
+      }
+      document.querySelectorAll("th.sortable").forEach((h) => {
+        h.classList.remove("active-sort", "sort-asc", "sort-desc");
+      });
+      th.classList.add("active-sort", state.sortDirection === "asc" ? "sort-asc" : "sort-desc");
+      renderTable();
+    });
   });
 
   els.entriesTable.addEventListener("click", (event) => {
