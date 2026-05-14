@@ -13,6 +13,7 @@ const state = {
   activeView: "dashboard",
   selectedEntry: null,
   selectedCustomer: null,
+  isPasswordRecovery: false,
   isSignup: false
 };
 
@@ -53,6 +54,7 @@ const els = {
   customerListView: document.querySelector("#customerListView"),
   customerList: document.querySelector("#customerList"),
   customerEmptyState: document.querySelector("#customerEmptyState"),
+  villageSuggestions: document.querySelector("#villageSuggestions"),
   settingsView: document.querySelector("#settingsView"),
   settingsForm: document.querySelector("#settingsForm"),
   settingsMessage: document.querySelector("#settingsMessage"),
@@ -126,6 +128,48 @@ function showResetRequestForm() {
   els.resetRequestMessage.style.color = "";
   els.resetEmail.value = document.querySelector("#email").value.trim();
   els.resetEmail.focus();
+}
+
+function showPasswordRecoveryForm() {
+  state.isPasswordRecovery = true;
+  els.authForm.classList.add("hidden");
+  els.resetRequestForm.classList.add("hidden");
+  els.confirmationView.classList.add("hidden");
+  els.resetForm.classList.remove("hidden");
+  els.authView.classList.remove("hidden");
+  els.workspaceView.classList.add("hidden");
+  els.resetMessage.textContent = "";
+  els.resetMessage.style.color = "";
+}
+
+function isPasswordRecoveryUrl() {
+  const params = new URLSearchParams((window.location.hash || "").replace(/^#/, ""));
+  const type = params.get("type");
+  return type === "recovery" || (params.has("access_token") && type !== "signup");
+}
+
+function handleAuthHashMessage() {
+  const params = new URLSearchParams((window.location.hash || "").replace(/^#/, ""));
+  const errorCode = params.get("error_code");
+  const errorDescription = params.get("error_description");
+
+  if (errorCode) {
+    state.isPasswordRecovery = false;
+    const expired = errorCode === "otp_expired";
+    const message = expired
+      ? "Password reset link expired ho gaya hai. Please Forgot password se naya reset email bhejein aur latest email link open karein."
+      : (errorDescription || "Password reset link valid nahi hai. Please naya reset email bhejein.");
+    setMessage(message, true);
+    showAuthForm();
+    return true;
+  }
+
+  if (isPasswordRecoveryUrl()) {
+    showPasswordRecoveryForm();
+    return true;
+  }
+
+  return false;
 }
 
 function showConfirmation(email) {
@@ -354,6 +398,11 @@ async function refreshData() {
 }
 
 async function boot() {
+  if (state.isPasswordRecovery || isPasswordRecoveryUrl()) {
+    showPasswordRecoveryForm();
+    return;
+  }
+
   const { data } = await supabaseClient.auth.getSession();
   state.session = data.session;
 
@@ -404,9 +453,21 @@ function setActiveView(view) {
 }
 
 function render() {
+  renderVillageSuggestions();
   renderCustomerList();
   renderStats();
   renderTable();
+}
+
+function renderVillageSuggestions() {
+  const villages = [...new Set(state.customers
+    .map((customer) => String(customer.location || "").trim())
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+
+  els.villageSuggestions.innerHTML = villages
+    .map((village) => `<option value="${escapeHtml(village)}"></option>`)
+    .join("");
 }
 
 function renderCustomerList() {
@@ -423,7 +484,11 @@ function renderCustomerList() {
         <span>Show details</span>
       </button>
       <div class="customer-details hidden">
-        <span>${escapeHtml([customer.phone, customer.address || customer.location].filter(Boolean).join(" | ") || "No phone or address")}</span>
+        <span>${escapeHtml([
+          customer.phone,
+          customer.location ? `Gaon: ${customer.location}` : "",
+          customer.address ? `Address: ${customer.address}` : ""
+        ].filter(Boolean).join(" | ") || "No phone or address")}</span>
         ${customer.notes ? `<small>${escapeHtml(customer.notes)}</small>` : ""}
         <div class="customer-items">
           ${customerEntries.length ? customerEntries.map((entry) => `
@@ -434,6 +499,7 @@ function renderCustomerList() {
           `).join("") : "<small>No item entries yet.</small>"}
         </div>
         <div class="customer-actions">
+          <button class="primary-btn small-btn" type="button" data-whatsapp-customer="${customer.id}">WhatsApp</button>
           <button class="ghost-btn small-btn" type="button" data-edit-customer="${customer.id}">Edit</button>
           <button class="danger-btn small-btn" type="button" data-delete-customer="${customer.id}">Delete</button>
         </div>
@@ -475,7 +541,7 @@ function getFilteredEntries() {
   let list = [...state.entries];
 
   if (state.activeView === "reminders") {
-    list = list.filter((entry) => entry.calculated_status !== "paid" && Number(entry.overdue_days || 0) > 0);
+    list = list.filter((entry) => entry.calculated_status !== "paid" && entry.due_date);
   }
 
   if (search) {
@@ -505,6 +571,8 @@ function getFilteredEntries() {
   list.sort((a, b) => {
     if (sortBy === "amount-desc") return Number(b.amount) - Number(a.amount);
     if (sortBy === "amount-asc") return Number(a.amount) - Number(b.amount);
+    if (sortBy === "gaon-asc") return String(a.customer_location || "").localeCompare(String(b.customer_location || ""));
+    if (sortBy === "gaon-desc") return String(b.customer_location || "").localeCompare(String(a.customer_location || ""));
     if (sortBy === "date-asc") return new Date(a.credit_date) - new Date(b.credit_date);
     return new Date(b.credit_date) - new Date(a.credit_date);
   });
@@ -524,6 +592,10 @@ function renderTable() {
     const overdueText = entry.overdue_days > 0 && entry.calculated_status !== "paid"
       ? `${entry.due_date || "-"} (${entry.overdue_days} days)`
       : entry.due_date || "-";
+    const commitmentAmount = getCommitmentAmount(entry);
+    const commitmentText = commitmentAmount
+      ? `${overdueText}<small>Committed: ${rupee.format(commitmentAmount)}</small>`
+      : overdueText;
     const history = state.payments
       .filter((payment) => payment.credit_entry_id === entry.id)
       .map((payment) => `${payment.payment_date}: ${rupee.format(Number(payment.amount || 0))}`)
@@ -535,14 +607,14 @@ function renderTable() {
           <strong>${escapeHtml(entry.customer_name || "-")}</strong>
           <span>Show details</span>
         </button>
-        <span class="customer-meta">${escapeHtml([entry.customer_phone, entry.customer_location].filter(Boolean).join(" | "))}</span>
+        <span class="customer-meta">${escapeHtml([entry.customer_phone, entry.customer_location ? `Gaon: ${entry.customer_location}` : ""].filter(Boolean).join(" | "))}</span>
       </td>
       <td class="item-cell" data-label="Item">${formatItemName(entry)}</td>
       <td data-label="Credit">${rupee.format(Number(entry.amount || 0))}</td>
       <td class="paid-cell" data-label="Paid">${rupee.format(Number(entry.paid_amount || 0))}<small>${history || "No payments yet"}</small></td>
       <td data-label="Remaining">${rupee.format(Number(entry.remaining_amount || 0))}</td>
       <td data-label="Date">${entry.credit_date || "-"}</td>
-      <td data-label="Due">${overdueText}</td>
+      <td class="due-cell" data-label="Due">${commitmentText}</td>
       <td data-label="Status"><span class="badge ${entry.calculated_status}">${entry.calculated_status}</span></td>
       <td data-label="Payment"><button class="ghost-btn" data-payment="${entry.id}">Add</button></td>
     `;
@@ -583,6 +655,30 @@ function formatItemName(entry) {
   `;
 }
 
+function getItemParts(entry) {
+  const parts = String(entry.item_name || "")
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const readPart = (label) => (parts.find((part) => part.toLowerCase().startsWith(`${label}:`)) || "").replace(new RegExp(`^${label}:\\s*`, "i"), "");
+
+  return {
+    name: parts.find((part) => !/^(material|weight|unit):/i.test(part)) || "-",
+    material: readPart("material"),
+    unit: readPart("unit"),
+    weight: readPart("weight")
+  };
+}
+
+function getCommitmentAmount(entry) {
+  const match = String(entry.notes || "").match(/\[commitment_amount:([0-9.]+)\]/i);
+  return match ? Number(match[1]) : 0;
+}
+
+function cleanEntryNotes(notes) {
+  return String(notes || "").replace(/\s*\[commitment_amount:[0-9.]+\]\s*/gi, "").trim();
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -614,7 +710,8 @@ function parseEntryItem(entry) {
     amount: Number(entry.amount || 0),
     creditDate: entry.credit_date || today(),
     dueDate: entry.due_date || null,
-    notes: entry.notes || ""
+    notes: cleanEntryNotes(entry.notes || ""),
+    commitmentAmount: getCommitmentAmount(entry)
   };
 }
 
@@ -624,6 +721,7 @@ function createItemRow(item = {}, container = els.itemRows) {
   if (item.id) row.dataset.entryId = item.id;
   if (item.creditDate) row.dataset.creditDate = item.creditDate;
   if (item.dueDate) row.dataset.dueDate = item.dueDate;
+  if (item.commitmentAmount) row.dataset.commitmentAmount = item.commitmentAmount;
   row.innerHTML = `
     <input class="item-name" type="text" placeholder="Saman / item name" value="${escapeHtml(item.name || "")}">
     <input class="item-weight" type="text" placeholder="Weight, e.g. 10 gram" value="${escapeHtml(item.weight || "")}">
@@ -684,7 +782,8 @@ function collectItemRows(container = els.itemRows) {
         materialLabel,
         amount: Number(row.querySelector(".item-amount").value),
         creditDate: row.dataset.creditDate || today(),
-        dueDate: row.dataset.dueDate || null
+        dueDate: row.dataset.dueDate || null,
+        commitmentAmount: Number(row.dataset.commitmentAmount || 0)
       };
     })
     .filter((item) => item.name || item.weight || item.unit || item.material || item.amount);
@@ -695,6 +794,11 @@ function findInvalidItem(items) {
 }
 
 function itemToEntryPayload(item, customerId, notes = "") {
+  const noteParts = [
+    cleanEntryNotes(notes),
+    item.commitmentAmount ? `[commitment_amount:${item.commitmentAmount}]` : ""
+  ].filter(Boolean);
+
   return {
     user_id: state.session.user.id,
     customer_id: customerId,
@@ -707,14 +811,17 @@ function itemToEntryPayload(item, customerId, notes = "") {
     amount: item.amount,
     credit_date: item.creditDate || today(),
     due_date: item.dueDate || null,
-    notes
+    notes: noteParts.join(" ")
   };
 }
 
 async function addCustomer(event) {
   event.preventDefault();
+  const village = document.querySelector("#customerVillage").value.trim();
   const address = document.querySelector("#customerAddress").value.trim();
   const items = collectItemRows();
+  const commitmentDate = document.querySelector("#commitmentDate").value || null;
+  const commitmentAmount = Number(document.querySelector("#commitmentAmount").value || 0);
 
   if (items.length === 0) {
     showAuthPopup("Item details needed", "Please add at least one item for this customer.");
@@ -726,11 +833,16 @@ async function addCustomer(event) {
     return;
   }
 
+  if ((commitmentDate && !commitmentAmount) || (!commitmentDate && commitmentAmount)) {
+    showAuthPopup("Commitment details needed", "Please add both payment commitment date and committed payment amount.");
+    return;
+  }
+
   const payload = {
     user_id: state.session.user.id,
     name: document.querySelector("#customerName").value.trim(),
     phone: document.querySelector("#customerPhone").value.trim(),
-    location: address,
+    location: village,
     address,
     notes: document.querySelector("#customerNotes").value.trim()
   };
@@ -746,7 +858,11 @@ async function addCustomer(event) {
     return;
   }
 
-  const entryPayloads = items.map((item) => itemToEntryPayload(item, customer.id, document.querySelector("#customerNotes").value.trim()));
+  const entryPayloads = items.map((item) => itemToEntryPayload({
+    ...item,
+    dueDate: commitmentDate,
+    commitmentAmount
+  }, customer.id, document.querySelector("#customerNotes").value.trim()));
 
   const { error: entryError } = await supabaseClient.from("credit_entries").insert(entryPayloads);
   if (entryError) {
@@ -777,7 +893,8 @@ function openCustomerEditor(customerId) {
 
   document.querySelector("#editCustomerName").value = state.selectedCustomer.name || "";
   document.querySelector("#editCustomerPhone").value = state.selectedCustomer.phone || "";
-  document.querySelector("#editCustomerAddress").value = state.selectedCustomer.address || state.selectedCustomer.location || "";
+  document.querySelector("#editCustomerVillage").value = state.selectedCustomer.location || "";
+  document.querySelector("#editCustomerAddress").value = state.selectedCustomer.address || "";
   document.querySelector("#editCustomerNotes").value = state.selectedCustomer.notes || "";
   resetItemRows(els.editItemRows, customerEntries.length ? customerEntries : [{}]);
   els.customerDialog.showModal();
@@ -787,6 +904,7 @@ async function updateCustomer(event) {
   event.preventDefault();
   if (!state.selectedCustomer) return;
 
+  const village = document.querySelector("#editCustomerVillage").value.trim();
   const address = document.querySelector("#editCustomerAddress").value.trim();
   const notes = document.querySelector("#editCustomerNotes").value.trim();
   const items = collectItemRows(els.editItemRows);
@@ -804,7 +922,7 @@ async function updateCustomer(event) {
   const payload = {
     name: document.querySelector("#editCustomerName").value.trim(),
     phone: document.querySelector("#editCustomerPhone").value.trim(),
-    location: address,
+    location: village,
     address,
     notes
   };
@@ -915,13 +1033,79 @@ async function deleteCustomer(customerId) {
   await loadData();
 }
 
+function buildCustomerMessage(customer) {
+  const entries = state.entries.filter((entry) => entry.customer_id === customer.id);
+  const lines = [
+    `DigiKhata - ${state.profile?.shop_name || "Khata"}`,
+    "",
+    `Customer: ${customer.name || "-"}`,
+    customer.phone ? `Phone: ${customer.phone}` : "",
+    customer.location ? `Gaon / city: ${customer.location}` : "",
+    customer.address ? `Address: ${customer.address}` : "",
+    "",
+    "Items and payment details:"
+  ].filter((line) => line !== "");
+
+  if (!entries.length) {
+    lines.push("No item entries found.");
+  }
+
+  entries.forEach((entry, index) => {
+    const item = getItemParts(entry);
+    const payments = state.payments.filter((payment) => payment.credit_entry_id === entry.id);
+    const commitmentAmount = getCommitmentAmount(entry);
+    lines.push(
+      "",
+      `${index + 1}. ${item.name}`,
+      item.material ? `Type: ${item.material}` : "",
+      item.weight ? `Weight: ${item.weight}` : "",
+      item.unit ? `Unit: ${item.unit}` : "",
+      `Purchase date: ${entry.credit_date || "-"}`,
+      `Total: ${rupee.format(Number(entry.amount || 0))}`,
+      `Paid: ${rupee.format(Number(entry.paid_amount || 0))}`,
+      `Remaining: ${rupee.format(Number(entry.remaining_amount || 0))}`,
+      entry.due_date ? `Commitment date: ${entry.due_date}` : "",
+      commitmentAmount ? `Committed payment: ${rupee.format(commitmentAmount)}` : "",
+      payments.length ? "Transactions:" : "Transactions: No payments yet"
+    );
+
+    payments.forEach((payment) => {
+      lines.push(`- ${payment.payment_date}: ${rupee.format(Number(payment.amount || 0))}`);
+    });
+  });
+
+  const total = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const paid = entries.reduce((sum, entry) => sum + Number(entry.paid_amount || 0), 0);
+  const remaining = entries.reduce((sum, entry) => sum + Number(entry.remaining_amount || 0), 0);
+  lines.push("", `Summary: Total ${rupee.format(total)} | Paid ${rupee.format(paid)} | Remaining ${rupee.format(remaining)}`);
+
+  return lines.filter((line) => line !== "").join("\n");
+}
+
+function shareCustomerOnWhatsApp(customerId) {
+  const customer = state.customers.find((item) => item.id === customerId);
+  if (!customer) return;
+  const message = buildCustomerMessage(customer);
+  const phone = String(customer.phone || "").replace(/\D/g, "");
+  const url = phone
+    ? `https://wa.me/91${phone.slice(-10)}?text=${encodeURIComponent(message)}`
+    : `https://wa.me/?text=${encodeURIComponent(message)}`;
+  window.open(url, "_blank", "noopener");
+}
+
 function openPayment(entryId) {
   state.selectedEntry = state.entries.find((entry) => entry.id === entryId);
   if (!state.selectedEntry) return;
-  els.paymentFor.textContent = `${state.selectedEntry.customer_name} | Remaining ${rupee.format(Number(state.selectedEntry.remaining_amount || 0))}`;
+  const currentCommitment = getCommitmentAmount(state.selectedEntry);
+  const commitmentText = state.selectedEntry.due_date
+    ? ` | Current promise ${state.selectedEntry.due_date}${currentCommitment ? ` for ${rupee.format(currentCommitment)}` : ""}`
+    : "";
+  els.paymentFor.textContent = `${state.selectedEntry.customer_name} | Remaining ${rupee.format(Number(state.selectedEntry.remaining_amount || 0))}${commitmentText}`;
   document.querySelector("#paymentAmount").max = state.selectedEntry.remaining_amount;
   document.querySelector("#paymentAmount").value = "";
   document.querySelector("#paymentNotes").value = "";
+  document.querySelector("#nextCommitmentDate").value = "";
+  document.querySelector("#nextCommitmentAmount").value = "";
   els.paymentDate.value = today();
   els.paymentDialog.showModal();
 }
@@ -929,6 +1113,13 @@ function openPayment(entryId) {
 async function addPayment(event) {
   event.preventDefault();
   if (!state.selectedEntry) return;
+
+  const nextCommitmentDate = document.querySelector("#nextCommitmentDate").value || null;
+  const nextCommitmentAmount = Number(document.querySelector("#nextCommitmentAmount").value || 0);
+  if ((nextCommitmentDate && !nextCommitmentAmount) || (!nextCommitmentDate && nextCommitmentAmount)) {
+    showAuthPopup("Next commitment needed", "Please add both next commitment date and next committed amount, or leave both blank.");
+    return;
+  }
 
   const payload = {
     user_id: state.session.user.id,
@@ -945,13 +1136,33 @@ async function addPayment(event) {
     return;
   }
 
+  const cleanNotes = cleanEntryNotes(state.selectedEntry.notes || "");
+  const nextNotes = [
+    cleanNotes,
+    nextCommitmentAmount ? `[commitment_amount:${nextCommitmentAmount}]` : ""
+  ].filter(Boolean).join(" ");
+  const { error: entryError } = await supabaseClient
+    .from("credit_entries")
+    .update({
+      due_date: nextCommitmentDate,
+      notes: nextNotes
+    })
+    .eq("id", state.selectedEntry.id);
+
+  if (entryError) {
+    showAuthPopup("Payment saved", `Payment saved, but next commitment could not be updated. ${entryError.message}`);
+    els.paymentDialog.close();
+    await loadData();
+    return;
+  }
+
   els.paymentDialog.close();
   await loadData();
 }
 
 function exportCsv() {
   const rows = getFilteredEntries();
-  const header = ["Customer", "Phone", "Address", "Item", "Amount", "Paid", "Remaining", "Credit date", "Due date", "Status"];
+  const header = ["Customer", "Phone", "Gaon / City", "Item", "Amount", "Paid", "Remaining", "Credit date", "Due date", "Status"];
   const csvRows = rows.map((entry) => [
     entry.customer_name,
     entry.customer_phone,
@@ -1001,6 +1212,8 @@ async function updatePassword(event) {
   }
 
   els.resetMessage.textContent = "Password updated. Opening the dashboard now.";
+  state.isPasswordRecovery = false;
+  history.replaceState(null, "", window.location.pathname + window.location.search);
   await boot();
 }
 
@@ -1146,6 +1359,12 @@ function bindEvents() {
       return;
     }
 
+    const whatsAppButton = event.target.closest("[data-whatsapp-customer]");
+    if (whatsAppButton) {
+      shareCustomerOnWhatsApp(whatsAppButton.dataset.whatsappCustomer);
+      return;
+    }
+
     const deleteButton = event.target.closest("[data-delete-customer]");
     if (deleteButton) deleteCustomer(deleteButton.dataset.deleteCustomer);
   });
@@ -1155,15 +1374,10 @@ function bindEvents() {
 
   supabaseClient.auth.onAuthStateChange((event) => {
     if (event === "PASSWORD_RECOVERY") {
-      els.authForm.classList.add("hidden");
-      els.resetRequestForm.classList.add("hidden");
-      els.confirmationView.classList.add("hidden");
-      els.resetForm.classList.remove("hidden");
-      els.authView.classList.remove("hidden");
-      els.workspaceView.classList.add("hidden");
+      showPasswordRecoveryForm();
     }
 
-    if (event === "SIGNED_IN") {
+    if (event === "SIGNED_IN" && !state.isPasswordRecovery && !isPasswordRecoveryUrl()) {
       boot().catch((error) => {
         console.error(error);
         const message = error.message || "DigiKhata could not be loaded.";
@@ -1175,7 +1389,9 @@ function bindEvents() {
 }
 
 bindEvents();
-boot().catch((error) => {
-  console.error(error);
-  alert(error.message || "DigiKhata could not be loaded.");
-});
+if (!handleAuthHashMessage()) {
+  boot().catch((error) => {
+    console.error(error);
+    alert(error.message || "DigiKhata could not be loaded.");
+  });
+}
