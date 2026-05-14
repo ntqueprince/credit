@@ -578,21 +578,21 @@ function renderTable() {
       .join("<br>");
 
     row.innerHTML = `
-      <td class="customer-cell" data-label="Customer">
+      <td class="customer-cell" data-label="">
         <button class="entry-toggle" type="button" aria-expanded="false">
           <strong>${escapeHtml(entry.customer_name || "-")}</strong>
           <span>Show details</span>
         </button>
         <span class="customer-meta">${escapeHtml([entry.customer_phone, entry.customer_location ? `Gaon: ${entry.customer_location}` : ""].filter(Boolean).join(" | "))}</span>
       </td>
-      <td class="item-cell" data-label="Item">${formatItemName(entry)}</td>
-      <td data-label="Credit">${rupee.format(Number(entry.amount || 0))}</td>
-      <td class="paid-cell" data-label="Paid">${rupee.format(Number(entry.paid_amount || 0))}<small>${history || "No payments yet"}</small></td>
-      <td data-label="Remaining">${rupee.format(Number(entry.remaining_amount || 0))}</td>
-      <td data-label="Date">${entry.credit_date || "-"}</td>
-      <td class="due-cell" data-label="Due">${commitmentText}</td>
-      <td data-label="Status"><span class="badge ${entry.calculated_status}">${entry.calculated_status}</span></td>
-      <td data-label="Payment"><button class="ghost-btn" data-payment="${entry.id}">Add</button></td>
+      <td class="item-cell" data-label="">${formatItemName(entry)}</td>
+      <td class="bill-cell" data-label="Bill">${rupee.format(Number(entry.amount || 0))}</td>
+      <td class="paid-cell" data-label="Jama">${rupee.format(Number(entry.paid_amount || 0))}<small>${history || ""}</small></td>
+      <td class="remaining-cell" data-label="Baki">${rupee.format(Number(entry.remaining_amount || 0))}</td>
+      <td class="date-cell" data-label="Tarikh">${entry.credit_date || "-"}</td>
+      <td class="due-cell" data-label="Vaada">${commitmentText}</td>
+      <td class="status-cell" data-label="Status"><span class="badge ${entry.calculated_status}">${entry.calculated_status}</span></td>
+      <td class="payment-cell" data-label=""><button class="ghost-btn" data-payment="${entry.id}">Jama karo</button></td>
     `;
 
     els.entriesTable.appendChild(row);
@@ -615,18 +615,12 @@ function formatItemName(entry) {
   if (parts.length === 0) return "-";
 
   const materialPart = parts.find((part) => part.toLowerCase().startsWith("material:"));
-  const weightPart = parts.find((part) => part.toLowerCase().startsWith("weight:"));
-  const unitPart = parts.find((part) => part.toLowerCase().startsWith("unit:"));
   const material = materialPart ? materialPart.replace(/^material:\s*/i, "") : "";
-  const weight = weightPart ? weightPart.replace(/^weight:\s*/i, "") : "";
-  const unit = unitPart ? unitPart.replace(/^unit:\s*/i, "") : "";
   const name = parts.find((part) => !/^material:/i.test(part) && !/^weight:/i.test(part) && !/^unit:/i.test(part)) || parts[0];
   const materialClass = material.toLowerCase() === "gold" ? "gold" : material.toLowerCase() === "silver" ? "silver" : "other";
-  const detail = [material, unit, weight].filter(Boolean).map(escapeHtml).join(" | ");
 
   return `
     <strong>${escapeHtml(name)}</strong>
-    ${detail ? `<span>${detail}</span>` : ""}
     ${material ? `<span class="material-pill ${materialClass}">${escapeHtml(material)}</span>` : ""}
   `;
 }
@@ -1045,18 +1039,15 @@ function buildCustomerMessage(customer) {
     const entryPaid = Number(entry.paid_amount || 0);
     const entryRemaining = Number(entry.remaining_amount || 0);
     const payments = state.payments.filter((payment) => payment.credit_entry_id === entry.id);
-    const commitmentAmount = getCommitmentAmount(entry);
 
-    const details = [item.material, item.weight, item.unit].filter(Boolean).join(" | ");
-    lines.push(`${index + 1}. *${item.name}*${details ? ` (${details})` : ""}`);
-    lines.push(`   Bill: ${rupee.format(entryTotal)} | Jama: ${rupee.format(entryPaid)} | *Baki: ${rupee.format(entryRemaining)}*`);
-
-    if (entry.due_date) {
-      const commitText = commitmentAmount ? ` - ${rupee.format(commitmentAmount)}` : "";
-      lines.push(`   Vaada: ${entry.due_date}${commitText}`);
-    }
+    lines.push(`${index + 1}. *${item.name}*`);
+    lines.push(`   Bill: ${rupee.format(entryTotal)}`);
+    lines.push(`   Jama: ${rupee.format(entryPaid)}`);
+    lines.push(`   *Baki: ${rupee.format(entryRemaining)}*`);
 
     if (payments.length) {
+      lines.push(``);
+      lines.push(`   Payments:`);
       payments.forEach((payment) => {
         lines.push(`   - ${payment.payment_date}: ${rupee.format(Number(payment.amount || 0))}`);
       });
@@ -1067,7 +1058,8 @@ function buildCustomerMessage(customer) {
 
   lines.push("---");
   if (entries.length > 1) {
-    lines.push(`Total Bill: ${rupee.format(total)} | Jama: ${rupee.format(paid)}`);
+    lines.push(`Total Bill: ${rupee.format(total)}`);
+    lines.push(`Total Jama: ${rupee.format(paid)}`);
   }
   lines.push(`*Baki: ${rupee.format(remaining)}*`);
 
