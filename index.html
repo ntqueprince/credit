@@ -166,8 +166,6 @@
             <input id="customerVillage" type="text" list="villageSuggestions" placeholder="Gaon / city">
             <input id="customerAddress" type="text" placeholder="Mohalla / sector / full address">
             <input id="customerNotes" type="text" placeholder="Notes">
-            <input id="commitmentDate" type="date" placeholder="Payment commitment date">
-            <input id="commitmentAmount" type="number" min="1" step="0.01" placeholder="Committed payment amount">
             <div class="items-editor">
               <div class="items-editor-head">
                 <h4>Items</h4>
@@ -217,43 +215,18 @@
           <p class="notice" id="settingsMessage"></p>
         </section>
 
-        <section class="panel" id="filtersPanel">
-          <div class="panel-head">
-            <h3>Filters</h3>
-          </div>
-          <div class="filters">
-            <input id="searchBox" type="search" placeholder="Search name, phone, gaon">
-            <input id="locationFilter" type="text" placeholder="Filter gaon / city">
-            <input id="monthFilter" type="month">
-            <select id="statusFilter">
-              <option value="">All status</option>
-              <option value="pending">Pending</option>
-              <option value="partial">Partial</option>
-              <option value="paid">Paid</option>
-            </select>
-            <select id="sortBy">
-              <option value="date-desc">Date newest</option>
-              <option value="date-asc">Date oldest</option>
-              <option value="gaon-asc">Gaon A-Z</option>
-              <option value="gaon-desc">Gaon Z-A</option>
-              <option value="amount-desc">Amount high</option>
-              <option value="amount-asc">Amount low</option>
-            </select>
-          </div>
-        </section>
-
         <section class="table-wrap" id="entriesTableWrap">
           <table>
             <thead>
               <tr>
                 <th>Customer</th>
                 <th>Item</th>
-                <th>Credit</th>
+                <th class="sortable" data-sort="credit">Credit</th>
                 <th>Paid</th>
-                <th>Remaining</th>
-                <th>Date</th>
-                <th>Due</th>
-                <th>Status</th>
+                <th class="sortable" data-sort="remaining">Remaining</th>
+                <th class="sortable active-sort" data-sort="date">Date</th>
+                <th class="sortable" data-sort="due">Due</th>
+                <th class="sortable" data-sort="status">Status</th>
                 <th>Payment</th>
               </tr>
             </thead>
@@ -273,16 +246,18 @@
 
   <dialog id="paymentDialog">
     <form method="dialog" class="dialog-card" id="paymentForm">
-      <h3>Add payment</h3>
+      <h3 id="paymentDialogTitle">Add payment</h3>
       <p id="paymentFor"></p>
       <input id="paymentAmount" type="number" min="1" step="0.01" required placeholder="Amount paid">
       <input id="paymentDate" type="date" required>
-      <input id="nextCommitmentDate" type="date" placeholder="Next commitment date">
-      <input id="nextCommitmentAmount" type="number" min="1" step="0.01" placeholder="Next committed amount">
+      <div id="commitmentFields">
+        <input id="nextCommitmentDate" type="date" placeholder="Next commitment date">
+        <input id="nextCommitmentAmount" type="number" min="1" step="0.01" placeholder="Next committed amount">
+      </div>
       <input id="paymentNotes" type="text" placeholder="Notes">
       <div class="dialog-actions">
         <button class="ghost-btn" value="cancel" type="button" id="closePayment">Cancel</button>
-        <button class="primary-btn" type="submit">Save payment</button>
+        <button class="primary-btn" type="submit" id="paymentSubmitBtn">Save payment</button>
       </div>
     </form>
   </dialog>
