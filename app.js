@@ -73,7 +73,8 @@ const els = {
   editCustomerForm: document.querySelector("#editCustomerForm"),
   accountDialog: document.querySelector("#accountDialog"),
   accountDialogTitle: document.querySelector("#accountDialogTitle"),
-  accountDialogMessage: document.querySelector("#accountDialogMessage")
+  accountDialogMessage: document.querySelector("#accountDialogMessage"),
+  dashboardActions: document.querySelector("#dashboardActions")
 };
 
 function today() {
@@ -444,10 +445,15 @@ function setActiveView(view) {
 
   els.pageTitle.textContent = labels[view];
   els.dashboardView.classList.toggle("hidden", view !== "dashboard");
+  els.dashboardActions.classList.toggle("hidden", view !== "dashboard");
   els.customersView.classList.toggle("hidden", view !== "customers");
   els.customerListView.classList.toggle("hidden", view !== "customers");
   els.settingsView.classList.toggle("hidden", view !== "settings");
-  els.entriesTableWrap.classList.toggle("hidden", !["dashboard", "reminders"].includes(view));
+  els.entriesTableWrap.classList.toggle("hidden", view !== "reminders");
+  if (view === "customers") {
+    els.customerForm.classList.add("hidden");
+    document.querySelector("#toggleCustomerForm").textContent = "\u2795 Add New Customer";
+  }
   if (view === "settings") fillSettingsForm();
   renderTable();
 }
@@ -1294,6 +1300,17 @@ function bindEvents() {
   document.querySelector("#exportCsv").addEventListener("click", exportCsv);
   els.addItemRow.addEventListener("click", () => els.itemRows.appendChild(createItemRow({}, els.itemRows)));
   els.addEditItemRow.addEventListener("click", () => els.editItemRows.appendChild(createItemRow({}, els.editItemRows)));
+
+  document.querySelector("#toggleCustomerForm").addEventListener("click", () => {
+    const isHidden = els.customerForm.classList.toggle("hidden");
+    document.querySelector("#toggleCustomerForm").textContent = isHidden ? "\u2795 Add New Customer" : "\u2716 Close Form";
+  });
+
+  document.querySelector("#dashboardAddCustomer").addEventListener("click", () => {
+    setActiveView("customers");
+    els.customerForm.classList.remove("hidden");
+    document.querySelector("#toggleCustomerForm").textContent = "\u2716 Close Form";
+  });
 
   document.querySelectorAll(".nav-btn").forEach((button) => {
     button.addEventListener("click", () => setActiveView(button.dataset.view));
