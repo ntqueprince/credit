@@ -754,7 +754,10 @@ function createItemRow(item = {}, container = els.itemRows) {
     </select>
     <input class="item-other-material hidden" type="text" placeholder="Other item type" value="${escapeHtml(item.otherMaterial || "")}">
     <input class="item-amount" type="number" min="1" step="0.01" placeholder="Price" value="${item.amount || ""}">
-    <input class="item-due-date" type="date" value="${item.dueDate || ""}">
+    <div style="display:flex; gap: 8px;">
+      <div style="flex: 1;"><small style="display:block; color:var(--muted); font-size:11px; margin-bottom:2px;">Sell Date (Tarikh)</small><input class="item-credit-date" type="date" value="${item.creditDate || today()}" style="width: 100%;"></div>
+      <div style="flex: 1;"><small style="display:block; color:var(--muted); font-size:11px; margin-bottom:2px;">Due Date (Vaada)</small><input class="item-due-date" type="date" value="${item.dueDate || ""}" style="width: 100%;"></div>
+    </div>
     <input class="item-commitment" type="number" min="1" step="0.01" placeholder="Committed amount" value="${item.commitmentAmount || ""}">
     <button class="ghost-btn small-btn remove-item" type="button">Remove</button>
   `;
@@ -803,7 +806,7 @@ function collectItemRows(container = els.itemRows) {
         material,
         materialLabel,
         amount: Number(row.querySelector(".item-amount").value),
-        creditDate: row.dataset.creditDate || today(),
+        creditDate: row.querySelector(".item-credit-date").value || today(),
         dueDate: row.querySelector(".item-due-date").value || null,
         commitmentAmount: Number(row.querySelector(".item-commitment").value || 0)
       };
@@ -943,6 +946,7 @@ function openCustomerView(customerId) {
     els.viewCustomerEntries.innerHTML = "<p class='empty' style='padding:0;'>No item entries yet.</p>";
   } else {
     entries.forEach((entry, index) => {
+      const parsedItem = parseEntryItem(entry);
       const payments = state.payments.filter((payment) => payment.credit_entry_id === entry.id);
       
       const history = payments.map((p) => 
@@ -951,11 +955,19 @@ function openCustomerView(customerId) {
 
       const entryDiv = document.createElement("div");
       entryDiv.className = "customer-item-line " + (getEntryMaterial(entry) ? `material-line-${getEntryMaterial(entry)}` : "");
+      
+      const detailsArray = [];
+      if (parsedItem.weight) detailsArray.push(parsedItem.weight);
+      if (parsedItem.unit) detailsArray.push(parsedItem.unit);
+      const detailsStr = detailsArray.length > 0 ? `<div style="font-size:12px; color:var(--muted); margin-top:2px;">Details: ${detailsArray.join(" | ")}</div>` : "";
+
       entryDiv.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <span style="font-size: 15px; font-weight: 600;">${index + 1}. ${formatItemName(entry)}</span>
           <span class="badge ${entry.calculated_status}">${entry.calculated_status}</span>
         </div>
+        ${detailsStr}
+        <div style="font-size:12px; color:var(--muted); margin-top:4px;">Tarikh (Sell Date): <b>${parsedItem.creditDate}</b></div>
         <div style="display: flex; gap: 10px; margin-top: 8px; font-size: 13px;">
           <div>Bill: <b>${rupee.format(Number(entry.amount || 0))}</b></div>
           <div>Jama: <b>${rupee.format(Number(entry.paid_amount || 0))}</b></div>
