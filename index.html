@@ -303,6 +303,22 @@
     </form>
   </dialog>
 
+  <dialog id="customerViewDialog">
+    <div class="dialog-card customer-edit-dialog" style="max-height: 90vh;">
+      <h3 id="viewCustomerTitle">Customer Details</h3>
+      <div id="viewCustomerInfo" style="margin-bottom: 12px; font-size: 14px; color: var(--muted); line-height: 1.4;"></div>
+      <div id="viewCustomerStats" style="display: flex; gap: 10px; margin-bottom: 16px; background: var(--bg); padding: 12px; border-radius: 8px;">
+        <div style="flex: 1; font-size: 13px;">Bill: <br><strong id="viewCustomerBill" style="color: var(--ink); font-size: 18px;">₹0</strong></div>
+        <div style="flex: 1; font-size: 13px;">Jama: <br><strong id="viewCustomerJama" style="color: var(--green-ink); font-size: 18px;">₹0</strong></div>
+        <div style="flex: 1; font-size: 13px;">Baki: <br><strong id="viewCustomerBaki" style="color: var(--red-ink); font-size: 18px;">₹0</strong></div>
+      </div>
+      <div id="viewCustomerEntries" style="display: grid; gap: 12px;"></div>
+      <div class="dialog-actions" style="margin-top: 16px;">
+        <button class="ghost-btn" type="button" id="closeCustomerViewDialog">Close</button>
+      </div>
+    </div>
+  </dialog>
+
   <datalist id="villageSuggestions"></datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
