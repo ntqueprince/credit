@@ -156,11 +156,16 @@
           </article>
         </section>
 
+        <div class="dashboard-actions" id="dashboardActions">
+          <button class="primary-btn" type="button" id="dashboardAddCustomer">➕ Add New Customer</button>
+        </div>
+
         <section class="panel hidden" id="customersView">
           <div class="panel-head">
-            <h3>Add customer</h3>
+            <h3>Customers</h3>
+            <button class="primary-btn compact" type="button" id="toggleCustomerForm">➕ Add New Customer</button>
           </div>
-          <form class="form-grid" id="customerForm">
+          <form class="form-grid hidden" id="customerForm">
             <input id="customerName" type="text" required placeholder="Customer name">
             <input id="customerPhone" type="tel" placeholder="Phone">
             <input id="customerVillage" type="text" list="villageSuggestions" placeholder="Gaon / city">
