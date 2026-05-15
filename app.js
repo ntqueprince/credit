@@ -75,7 +75,14 @@ const els = {
   accountDialogTitle: document.querySelector("#accountDialogTitle"),
   accountDialogMessage: document.querySelector("#accountDialogMessage"),
   dashboardActions: document.querySelector("#dashboardActions"),
-  customerSearchInput: document.querySelector("#customerSearchInput")
+  customerSearchInput: document.querySelector("#customerSearchInput"),
+  customerViewDialog: document.querySelector("#customerViewDialog"),
+  viewCustomerTitle: document.querySelector("#viewCustomerTitle"),
+  viewCustomerInfo: document.querySelector("#viewCustomerInfo"),
+  viewCustomerBill: document.querySelector("#viewCustomerBill"),
+  viewCustomerJama: document.querySelector("#viewCustomerJama"),
+  viewCustomerBaki: document.querySelector("#viewCustomerBaki"),
+  viewCustomerEntries: document.querySelector("#viewCustomerEntries")
 };
 
 function today() {
@@ -520,6 +527,7 @@ function renderCustomerList() {
           `).join("") : "<small>No item entries yet.</small>"}
         </div>
         <div class="customer-actions">
+          <button class="primary-btn small-btn" type="button" data-view-customer="${customer.id}">View</button>
           <button class="primary-btn small-btn" type="button" data-whatsapp-customer="${customer.id}">WhatsApp</button>
           <button class="ghost-btn small-btn" type="button" data-edit-customer="${customer.id}">Edit</button>
           <button class="danger-btn small-btn" type="button" data-delete-customer="${customer.id}">Delete</button>
@@ -892,6 +900,59 @@ function openCustomerEditor(customerId) {
   document.querySelector("#editCustomerNotes").value = state.selectedCustomer.notes || "";
   resetItemRows(els.editItemRows, customerEntries.length ? customerEntries : [{}]);
   els.customerDialog.showModal();
+}
+
+function openCustomerView(customerId) {
+  const customer = state.customers.find((c) => c.id === customerId);
+  if (!customer) return;
+
+  const entries = state.entries.filter((entry) => entry.customer_id === customerId);
+  const total = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const paid = entries.reduce((sum, entry) => sum + Number(entry.paid_amount || 0), 0);
+  const remaining = entries.reduce((sum, entry) => sum + Number(entry.remaining_amount || 0), 0);
+
+  els.viewCustomerTitle.textContent = customer.name || "Customer";
+  els.viewCustomerInfo.innerHTML = escapeHtml([
+    customer.phone,
+    customer.location ? `Gaon: ${customer.location}` : "",
+    customer.address ? `Address: ${customer.address}` : ""
+  ].filter(Boolean).join(" | ")) + (customer.notes ? `<br><em>${escapeHtml(customer.notes)}</em>` : "");
+
+  els.viewCustomerBill.textContent = rupee.format(total);
+  els.viewCustomerJama.textContent = rupee.format(paid);
+  els.viewCustomerBaki.textContent = rupee.format(remaining);
+
+  els.viewCustomerEntries.innerHTML = "";
+  if (!entries.length) {
+    els.viewCustomerEntries.innerHTML = "<p class='empty' style='padding:0;'>No item entries yet.</p>";
+  } else {
+    entries.forEach((entry, index) => {
+      const payments = state.payments.filter((payment) => payment.credit_entry_id === entry.id);
+      
+      const history = payments.map((p) => 
+        `<div style="font-size:12px; color:var(--muted); margin-top:4px;">- ${p.payment_date}: ${rupee.format(Number(p.amount || 0))}</div>`
+      ).join("");
+
+      const entryDiv = document.createElement("div");
+      entryDiv.className = "customer-item-line " + (getEntryMaterial(entry) ? `material-line-${getEntryMaterial(entry)}` : "");
+      entryDiv.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 15px; font-weight: 600;">${index + 1}. ${formatItemName(entry)}</span>
+          <span class="badge ${entry.calculated_status}">${entry.calculated_status}</span>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 8px; font-size: 13px;">
+          <div>Bill: <b>${rupee.format(Number(entry.amount || 0))}</b></div>
+          <div>Jama: <b>${rupee.format(Number(entry.paid_amount || 0))}</b></div>
+          <div>Baki: <b style="color:var(--red-ink);">${rupee.format(Number(entry.remaining_amount || 0))}</b></div>
+        </div>
+        ${entry.due_date ? `<div style="font-size:12px; color:var(--muted); margin-top:6px;">Vaada: ${entry.due_date}</div>` : ""}
+        ${history ? `<div style="margin-top:8px; border-top:1px solid var(--line); padding-top:4px;">${history}</div>` : ""}
+      `;
+      els.viewCustomerEntries.appendChild(entryDiv);
+    });
+  }
+
+  els.customerViewDialog.showModal();
 }
 
 async function updateCustomer(event) {
@@ -1309,6 +1370,7 @@ function bindEvents() {
   els.paymentForm.addEventListener("submit", addPayment);
   document.querySelector("#closePayment").addEventListener("click", () => els.paymentDialog.close());
   document.querySelector("#closeCustomerDialog").addEventListener("click", () => els.customerDialog.close());
+  document.querySelector("#closeCustomerViewDialog").addEventListener("click", () => els.customerViewDialog.close());
   document.querySelector("#signOut").addEventListener("click", signOut);
   document.querySelector("#mobileSignOut").addEventListener("click", signOut);
   document.querySelector("#refreshData").addEventListener("click", refreshData);
@@ -1385,6 +1447,12 @@ function bindEvents() {
     const whatsAppButton = event.target.closest("[data-whatsapp-customer]");
     if (whatsAppButton) {
       shareCustomerOnWhatsApp(whatsAppButton.dataset.whatsappCustomer);
+      return;
+    }
+
+    const viewButton = event.target.closest("[data-view-customer]");
+    if (viewButton) {
+      openCustomerView(viewButton.dataset.viewCustomer);
       return;
     }
 
