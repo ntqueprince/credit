@@ -74,7 +74,8 @@ const els = {
   accountDialog: document.querySelector("#accountDialog"),
   accountDialogTitle: document.querySelector("#accountDialogTitle"),
   accountDialogMessage: document.querySelector("#accountDialogMessage"),
-  dashboardActions: document.querySelector("#dashboardActions")
+  dashboardActions: document.querySelector("#dashboardActions"),
+  customerSearchInput: document.querySelector("#customerSearchInput")
 };
 
 function today() {
@@ -478,9 +479,23 @@ function renderVillageSuggestions() {
 
 function renderCustomerList() {
   els.customerList.innerHTML = "";
-  els.customerEmptyState.classList.toggle("hidden", state.customers.length > 0);
+  
+  const query = (els.customerSearchInput?.value || "").toLowerCase().trim();
+  const filteredCustomers = state.customers.filter((customer) => {
+    if (!query) return true;
+    const nameMatch = String(customer.name || "").toLowerCase().includes(query);
+    const locationMatch = String(customer.location || "").toLowerCase().includes(query);
+    return nameMatch || locationMatch;
+  });
 
-  state.customers.forEach((customer) => {
+  els.customerEmptyState.classList.toggle("hidden", filteredCustomers.length > 0);
+  if (filteredCustomers.length === 0 && state.customers.length > 0) {
+    els.customerEmptyState.textContent = "No customers match your search.";
+  } else {
+    els.customerEmptyState.textContent = "No customers yet.";
+  }
+
+  filteredCustomers.forEach((customer) => {
     const customerEntries = state.entries.filter((entry) => entry.customer_id === customer.id);
     const card = document.createElement("article");
     card.className = "customer-card";
@@ -1310,6 +1325,10 @@ function bindEvents() {
     setActiveView("customers");
     els.customerForm.classList.remove("hidden");
     document.querySelector("#toggleCustomerForm").textContent = "\u2716 Close Form";
+  });
+
+  els.customerSearchInput.addEventListener("input", () => {
+    renderCustomerList();
   });
 
   document.querySelectorAll(".nav-btn").forEach((button) => {
