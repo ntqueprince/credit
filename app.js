@@ -694,7 +694,10 @@ function parseEntryItem(entry) {
     .filter(Boolean);
   const material = (parts.find((part) => /^material:/i.test(part)) || "").replace(/^material:\s*/i, "");
   const unit = (parts.find((part) => /^unit:/i.test(part)) || "").replace(/^unit:\s*/i, "");
-  const weight = (parts.find((part) => /^weight:/i.test(part)) || "").replace(/^weight:\s*/i, "");
+  const weightStr = (parts.find((part) => /^weight:/i.test(part)) || "").replace(/^weight:\s*/i, "");
+  const weightParts = weightStr.trim().split(/\s+/);
+  const weightVal = weightParts[0] || "";
+  const weightUnit = weightParts[1] || "gram";
   const name = parts.find((part) => !/^(material|unit|weight):/i.test(part)) || "";
   const normalizedMaterial = material.toLowerCase();
   const materialValue = ["gold", "silver"].includes(normalizedMaterial) ? normalizedMaterial : material ? "other" : "";
@@ -702,7 +705,9 @@ function parseEntryItem(entry) {
   return {
     id: entry.id,
     name,
-    weight,
+    weight: weightStr,
+    weightVal,
+    weightUnit,
     unit,
     material: materialValue,
     otherMaterial: materialValue === "other" ? material : "",
@@ -728,7 +733,13 @@ function createItemRow(item = {}, container = els.itemRows) {
   row.innerHTML = `
     ${duesHtml}
     <input class="item-name" type="text" placeholder="Saman / item name" value="${escapeHtml(item.name || "")}">
-    <input class="item-weight" type="text" placeholder="Weight, e.g. 10 gram" value="${escapeHtml(item.weight || "")}">
+    <div style="display:flex; gap: 8px;">
+      <input class="item-weight-val" type="number" step="any" placeholder="Weight (e.g. 10)" value="${escapeHtml(item.weightVal || "")}" style="flex: 1;">
+      <select class="item-weight-unit" style="flex: 0 0 90px; padding-left: 8px; padding-right: 8px;">
+        <option value="gram">gram</option>
+        <option value="mg">mg</option>
+      </select>
+    </div>
     <select class="item-unit">
       <option value="">Piece / Pair / Set</option>
       <option value="Piece">Piece</option>
@@ -748,6 +759,7 @@ function createItemRow(item = {}, container = els.itemRows) {
     <button class="ghost-btn small-btn remove-item" type="button">Remove</button>
   `;
 
+  row.querySelector(".item-weight-unit").value = item.weightUnit || "gram";
   row.querySelector(".item-unit").value = item.unit || "";
   row.querySelector(".item-material").value = item.material || "";
   const syncOtherMaterial = (event) => {
@@ -779,10 +791,14 @@ function collectItemRows(container = els.itemRows) {
         ? otherMaterial
         : material ? material.charAt(0).toUpperCase() + material.slice(1) : "";
 
+        const weightVal = row.querySelector(".item-weight-val").value.trim();
+      const weightUnit = row.querySelector(".item-weight-unit").value;
+      const weight = weightVal ? `${weightVal} ${weightUnit}` : "";
+
       return {
         id: row.dataset.entryId || "",
         name: row.querySelector(".item-name").value.trim(),
-        weight: row.querySelector(".item-weight").value.trim(),
+        weight,
         unit: row.querySelector(".item-unit").value,
         material,
         materialLabel,
