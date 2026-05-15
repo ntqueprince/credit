@@ -1021,9 +1021,10 @@ function buildCustomerMessage(customer) {
   const paid = entries.reduce((sum, entry) => sum + Number(entry.paid_amount || 0), 0);
   const remaining = entries.reduce((sum, entry) => sum + Number(entry.remaining_amount || 0), 0);
 
+  // Center-align shop name with decorative emojis
+  const shopLine = `         💎 *${shopName}* 💎`;
   const lines = [
-    `*${shopName}*`,
-    `${customer.name || "-"}${customer.location ? ` (${customer.location})` : ""}`
+    shopLine
   ];
 
   if (!entries.length) {
@@ -1038,30 +1039,20 @@ function buildCustomerMessage(customer) {
     const entryTotal = Number(entry.amount || 0);
     const entryPaid = Number(entry.paid_amount || 0);
     const entryRemaining = Number(entry.remaining_amount || 0);
-    const payments = state.payments.filter((payment) => payment.credit_entry_id === entry.id);
-
     lines.push(`${index + 1}. *${item.name}*`);
     lines.push(`   Bill: ${rupee.format(entryTotal)}`);
     lines.push(`   Jama: ${rupee.format(entryPaid)}`);
     lines.push(`   *Baki: ${rupee.format(entryRemaining)}*`);
 
-    if (payments.length) {
-      lines.push(``);
-      lines.push(`   Payments:`);
-      payments.forEach((payment) => {
-        lines.push(`   - ${payment.payment_date}: ${rupee.format(Number(payment.amount || 0))}`);
-      });
-    }
-
     lines.push("");
   });
 
-  lines.push("---");
+  lines.push("━━━━━━━━━━━━━━━━");
   if (entries.length > 1) {
-    lines.push(`Total Bill: ${rupee.format(total)}`);
-    lines.push(`Total Jama: ${rupee.format(paid)}`);
+    lines.push(`📋 Total Bill: ${rupee.format(total)}`);
+    lines.push(`✅ Total Jama: ${rupee.format(paid)}`);
   }
-  lines.push(`*Baki: ${rupee.format(remaining)}*`);
+  lines.push(`💰 *Baki: ${rupee.format(remaining)}*`);
 
   return lines.join("\n");
 }
